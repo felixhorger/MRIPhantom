@@ -2,7 +2,6 @@
 module MRIPhantoms
 	
 	using FFTW
-	using Interpolations
 	import FINUFFT
 	import MRIRecon
 
@@ -12,9 +11,8 @@ module MRIPhantoms
 
 	"""
 	# TODO: There is a coordinate transforms julia package
-	# TODO: Not sure whether the 2D case should be made conform with the others in terms of types
-	function spherical_coordinates(dim::Val{2}, num::Integer)
-		return range(0, 2π * (1 - 1/num); length=num)
+	function spherical_coordinates(dim::Val{2}, num::Tuple{Integer})
+		return Base.Iterators.product(range(0, 2π * (1 - 1/num[1]); length=num[1]))
 	end
 	function spherical_coordinates(dim::Val{N}, num::NTuple{M, Integer}) where {N, M}
 		@assert N > 2
@@ -81,42 +79,6 @@ module MRIPhantoms
 
 
 	"""
-		Sinc interpolation downsampling, in the first M axes
-	"""
-	function downsample(a::AbstractArray{T, N}, downsampling::NTuple{M, Integer}) where {N, M, T <: Number}
-		shape = size(a)[1:M]
-		downsampled_shape = divrem.(shape, downsampling)
-		@assert all(p -> p[2] == 0, downsampled_shape) "downsampling must yield no remainder when dividing the size of a (except last dimension)"
-		downsampled_shape = ntuple(d -> downsampled_shape[d][1], M)
-		# Fourier transform
-		b = fftshift(fft(a, 1:M), 1:M)
-		# Extract centre indices, cutting off high frequency components
-		centre_indices = MRIRecon.centre_indices.(shape, downsampled_shape)
-		b = @view b[centre_indices..., ntuple(_ -> :, N-M)...]
-		# Transform back
-		interpolated = ifft(ifftshift(b, 1:M), 1:M) ./ prod(downsampling)
-		return interpolated
-	end
-
-	"""
-		Sinc interpolation upsampling, in the first M axes
-	"""
-	function upsample(a::AbstractArray{T, N}, upsampling::NTuple{M, Integer}) where {N, M, T <: Number}
-		@assert N == M + 1
-		shape = size(a)[1:M]
-		residual_shape = size(a)[M+1:N]
-		upsampled_shape = shape .* upsampling
-		# Zero pad the Fourier transform of a
-		centre_indices = MRIRecon.centre_indices.(upsampled_shape, shape)
-		b = zeros(T, upsampled_shape..., residual_shape...)
-		b[centre_indices..., ntuple(_ -> :, N-M)...] = fftshift(fft(a, 1:M), 1:M)
-		# Transform back
-		interpolated = ifft(ifftshift(b, 1:M), 1:M) .* prod(upsampling)
-		return interpolated
-	end
-
-
-	"""
 		Last axis is channels
 		shape is size of target kspace
 
@@ -166,7 +128,7 @@ module MRIPhantoms
 		# Spatial profile of phantom
 		highres_shutter = ellipsoidal_shutter(upsampled_shape, 0.4 .* upsampled_shape)
 		# Downsample to get back to target resolution
-		shutter = downsample(highres_shutter, upsampling)
+		shutter = MRIRecon.downsample(highres_shutter, upsampling)
 		return shutter, highres_shutter
 	end
 
