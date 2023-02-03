@@ -111,8 +111,8 @@ module MRIPhantoms
 			function measure(
 				a::AbstractArray{<: Number, $N},
 				upsampling::NTuple{$(N-1), Integer},
-				k::AbstractMatrix{<: Real},
-				eps::Real
+				k::AbstractMatrix{<: Real};
+				eps::Real=1e-8
 			)
 				@assert size(k, 1) == $(N-1)
 				k = k ./ upsampling
