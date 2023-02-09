@@ -4,49 +4,18 @@ module MRIPhantoms
 	using FFTW
 	import FINUFFT
 	import MRIRecon
-
+	using SphericalCoordinates
 
 	"""
 		Width relative to shape
 
 	"""
-	# TODO: There is a coordinate transforms julia package
-	function spherical_coordinates(dim::Val{2}, num::Tuple{Integer})
-		return Base.Iterators.product(range(0, 2π * (1 - 1/num[1]); length=num[1]))
-	end
-	function spherical_coordinates(dim::Val{N}, num::NTuple{M, Integer}) where {N, M}
-		@assert N > 2
-		@assert M == N - 1
-		offset = π / (num[M] + 2)
-		return Base.Iterators.product(
-			(range(0, 2π * (1 - 1/num[i]); length=num[i]) for i = 1:M-1)...,
-			range(offset, π - offset; length=num[M])
-		)
-	end
-	@generated function spherical2cartesian(Φ::NTuple{N, Real}) where N
-		expr = :()
-		retval = join(ntuple(i -> "x_$i", N+1), ", ")
-		for i in 1:N
-			expr = quote
-				$expr
-				sine, cosine = sincos(Φ[$i])
-				$(Symbol("x_$i")) = cosine * prod_sines
-				prod_sines *= sine
-			end
-		end
-		return quote
-			local prod_sines = 1
-			$expr
-			$(Symbol("x_$(N+1)")) = prod_sines
-			return $(Meta.parse(retval))
-		end
-	end
 	function coil_sensitivities(shape::NTuple{N, Integer}, num_channels::NTuple{M, Integer}, width::Real) where {N, M}
 		@assert N == M + 1
 		# TODO: Phases?
 		sensitivities = zeros(ComplexF64, shape..., prod(num_channels))
 		width = width .* shape
-		for (c, Φ) = enumerate(spherical_coordinates(Val(N), num_channels))
+		for (c, Φ) = enumerate(hypersphere(Val(N), num_channels))
 			position = 0.25 .* shape .* (spherical2cartesian(Φ) .+ 2)
 			for X in CartesianIndices(shape) # TODO: inbounds
 				sensitivities[X, c] = @. exp(-0.5 * $sum((($Tuple(X) - position) / width)^2))
@@ -79,9 +48,9 @@ module MRIPhantoms
 
 
 	"""
+		a is upsampled array
 		Last axis is channels
 		shape is size of target kspace
-
 	"""
 	function measure(
 		a::AbstractArray{<: Number, N},
