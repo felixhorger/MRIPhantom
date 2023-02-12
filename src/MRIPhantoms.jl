@@ -81,7 +81,7 @@ module MRIPhantoms
 				a::AbstractArray{<: Number, $N},
 				upsampling::NTuple{$(N-1), Integer},
 				k::AbstractMatrix{<: Real};
-				eps::Real=1e-8
+				eps::Real=1e-12
 			)
 				@assert size(k, 1) == $(N-1)
 				k = k ./ upsampling
