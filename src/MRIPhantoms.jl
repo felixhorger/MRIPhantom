@@ -110,7 +110,7 @@ module MRIPhantoms
 	end
 
 
-	function homogeneous(shape::NTuple{N, Integer}, upsampling::NTuple{N, Integer}; radius::Real=0.4) where N
+	function homogeneous(shape::NTuple{N, Integer}, upsampling::NTuple{N, Integer}; radius::Union{Real, NTuple{N, Real}}=0.4) where N
 		upsampled_shape = upsampling .* shape
 		# Spatial profile of phantom
 		highres_shutter = ellipsoidal_shutter(upsampled_shape, radius .* upsampled_shape)
