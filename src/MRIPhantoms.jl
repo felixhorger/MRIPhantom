@@ -1,4 +1,3 @@
-
 module MRIPhantoms
 	
 	using FFTW
@@ -20,12 +19,15 @@ module MRIPhantoms
 		mask_width = 0.4 .* shape
 		num_channels = (num_channels[1] - 1, num_channels[2:end]...)
 		for (c, Φ) = enumerate(hypersphere(Val(N), num_channels))
-			position = 0.25 .* shape .* (spherical2cartesian(Φ) .+ 2)
+			#position = 0.25 .* shape .* (spherical2cartesian(Φ) .+ 2)
+			position = shape .* (0.35 .* spherical2cartesian(Φ) .+ 0.5)
 			for X in CartesianIndices(shape) # TODO: inbounds
-				sensitivities[X, c] = exp(-0.5 * (sum(((Tuple(X) .- position) ./ width).^2 .+ ((Tuple(X) .- centre) ./ mask_width).^6)))
+				#sensitivities[X, c] = exp(-0.5 * (sum(((Tuple(X) .- position) ./ width).^2 .+ ((Tuple(X) .- centre) ./ mask_width).^6)))
+				sensitivities[X, c] = exp(-0.5 * sum(((Tuple(X) .- position) ./ width).^2 ))
 			end
 		end
 		for X in CartesianIndices(shape) # TODO: inbounds
+			#sensitivities[X, total_num_channels] = exp(-0.5 * sum(((Tuple(X) .- centre) ./ width).^2))
 			sensitivities[X, total_num_channels] = exp(-0.5 * sum(((Tuple(X) .- centre) ./ width).^2))
 		end
 		return sensitivities
@@ -68,6 +70,7 @@ module MRIPhantoms
 		a is upsampled array
 		last axis is channels, dynamic etc
 		shape is size of target kspace
+		TODO: isn't it redundant to have shape, as only the last dim of a is "extra" (e.g. channels), and so shpae can be inferred, there even is an assert...
 	"""
 	function measure(
 		a::AbstractArray{<: Number, N},
@@ -81,7 +84,7 @@ module MRIPhantoms
 		centre_indices = MRIRecon.centre_indices.(upsampled_shape, shape)
 		# FFT and extract target k-space
 		kspace = fft(a, 1:M)
-		kspace = fftshift(kspace, 1:M)
+		kspace = fftshift(kspace, 1:M) # TODO: allocate tmp array and use fftshift!(), as this can get very large due to oversampling and channels etc
 		kspace_centre = @view kspace[centre_indices..., :]
 		lowres_kspace = ifftshift(kspace_centre, 1:M)
 		# Normalise for different k-space sizes
@@ -99,11 +102,12 @@ module MRIPhantoms
 				a::AbstractArray{<: Number, $N},
 				upsampling::NTuple{$(N-1), Integer},
 				k::AbstractMatrix{<: Real};
-				eps::Real=1e-12
+				eps::Real=1e-8,
+				kwargs...
 			)
 				@assert size(k, 1) == $(N-1)
 				k = k ./ upsampling
-				kspace = FINUFFT.$(Symbol("nufft$(N-1)d2"))($(Meta.parse(ks))..., -1, eps, a) ./ prod(upsampling)
+				kspace = FINUFFT.$(Symbol("nufft$(N-1)d2"))($(Meta.parse(ks))..., -1, eps, a; kwargs...) ./ prod(upsampling)
 				return kspace
 			end
 		end
